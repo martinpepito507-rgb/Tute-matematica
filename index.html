@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>TurriMatematicas</title>
+
+<style>
+body { margin:0; background:black; }
+canvas { display:block; margin:auto; background:#111; }
+
+button {
+ position:absolute;
+ width:60px;
+ height:60px;
+ font-size:20px;
+ opacity:0.7;
+}
+
+#up { left:80px; bottom:150px; }
+#down { left:80px; bottom:50px; }
+#left { left:10px; bottom:50px; }
+#right { left:150px; bottom:50px; }
+#attack { right:30px; bottom:80px; width:80px; height:80px; background:red; color:white; }
+</style>
+
+</head>
+
+<body>
+
+<canvas id="game" width="800" height="600"></canvas>
+
+<button id="up">↑</button>
+<button id="down">↓</button>
+<button id="left">←</button>
+<button id="right">→</button>
+<button id="attack">⚔</button>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+// SPRITES
+const playerImg = new Image();
+playerImg.src = "https://i.imgur.com/3Wb7Q0R.png";
+
+const enemyImg = new Image();
+enemyImg.src = "https://i.imgur.com/Z6X6K6F.png";
+
+// CONFIG
+const TILE = 50;
+const MAP_SIZE = 30;
+
+// MAPA GRANDE
+let map = [];
+for(let y=0;y<MAP_SIZE;y++){
+ map[y]=[];
+ for(let x=0;x<MAP_SIZE;x++){
+  map[y][x] = Math.random()<0.2 ? 1 : 0;
+ }
+}
+
+// PLAYER
+let player = {
+ x:200,y:200,size:48,speed:3,hp:100,
+ dir:"down",frame:0,frameTimer:0,kills:0
+};
+
+// CÁMARA
+let cameraX = 0;
+let cameraY = 0;
+
+// ENEMIGOS
+let enemies = [];
+for(let i=0;i<10;i++){
+ enemies.push({
+  x:Math.random()*MAP_SIZE*TILE,
+  y:Math.random()*MAP_SIZE*TILE,
+  size:40,
+  hp:10
+ });
+}
+
+// ATAQUE
+let attackBox = {x:0,y:0,w:40,h:40,active:false,cooldown:0};
+
+// INPUT
+let move={up:false,down:false,left:false,right:false};
+
+// CONTROLES
+up.ontouchstart=()=>move.up=true;
+up.ontouchend=()=>move.up=false;
+down.ontouchstart=()=>move.down=true;
+down.ontouchend=()=>move.down=false;
+left.ontouchstart=()=>move.left=true;
+left.ontouchend=()=>move.left=false;
+right.ontouchstart=()=>move.right=true;
+right.ontouchend=()=>move.right=false;
+attack.ontouchstart=doAttack;
+
+// COLISION MAPA
+function isWall(x,y){
+ let gx=Math.floor(x/TILE);
+ let gy=Math.floor(y/TILE);
+ if(gx<0||gy<0||gx>=MAP_SIZE||gy>=MAP_SIZE) return true;
+ return map[gy][gx]===1;
+}
+
+// MATEMÁTICA
+function generarPregunta(){
+ let t=Math.floor(Math.random()*4);
+ if(t===0) return {p:"Derivá: 3x^2",r:"6x"};
+ if(t===1) return {p:"∫ 2x dx",r:"x^2 + C"};
+ if(t===2) return {p:"Resolver: 2x+6=0",r:"-3"};
+ if(t===3) return {p:"cos(0°) =",r:"1"};
+}
+
+// UPDATE
+function update(){
+
+ let nx=player.x, ny=player.y;
+
+ if(move.up){ny-=player.speed; player.dir="up";}
+ if(move.down){ny+=player.speed; player.dir="down";}
+ if(move.left){nx-=player.speed; player.dir="left";}
+ if(move.right){nx+=player.speed; player.dir="right";}
+
+ if(!isWall(nx,player.y)) player.x=nx;
+ if(!isWall(player.x,ny)) player.y=ny;
+
+ // cámara
+ cameraX = player.x - canvas.width/2;
+ cameraY = player.y - canvas.height/2;
+
+ // animación
+ player.frameTimer++;
+ if(player.frameTimer>10){
+  player.frame=(player.frame+1)%3;
+  player.frameTimer=0;
+ }
+
+ // enemigos
+ enemies.forEach(e=>{
+  let dx=player.x-e.x;
+  let dy=player.y-e.y;
+  let d=Math.hypot(dx,dy);
+
+  if(d<200){
+   e.x+=dx*0.01;
+   e.y+=dy*0.01;
+  }
+
+  if(collide(player,e)) player.hp-=0.1;
+
+  if(attackBox.active && collide(attackBox,e)){
+   e.hp--;
+  }
+
+  if(e.hp<=0){
+   let q=generarPregunta();
+   let r=prompt(q.p);
+
+   if(r===q.r){
+    player.kills++;
+   } else {
+    player.hp-=20;
+   }
+
+   e.hp=10;
+   e.x=Math.random()*MAP_SIZE*TILE;
+   e.y=Math.random()*MAP_SIZE*TILE;
+  }
+ });
+
+ if(attackBox.cooldown>0) attackBox.cooldown--;
+
+ if(player.hp<=0){
+  alert("💀 GAME OVER");
+  location.reload();
+ }
+}
+
+// ATAQUE
+function doAttack(){
+ if(attackBox.cooldown>0) return;
+
+ attackBox.cooldown=20;
+ attackBox.active=true;
+
+ attackBox.x=player.x;
+ attackBox.y=player.y;
+
+ if(player.dir=="up") attackBox.y-=40;
+ if(player.dir=="down") attackBox.y+=40;
+ if(player.dir=="left") attackBox.x-=40;
+ if(player.dir=="right") attackBox.x+=40;
+
+ setTimeout(()=>attackBox.active=false,200);
+}
+
+// COLISION
+function collide(a,b){
+ return a.x<b.x+b.size &&
+        a.x+(a.w||a.size)>b.x &&
+        a.y<b.y+b.size &&
+        a.y+(a.h||a.size)>b.y;
+}
+
+// MAPA
+function drawMap(){
+ for(let y=0;y<MAP_SIZE;y++){
+  for(let x=0;x<MAP_SIZE;x++){
+   let drawX=x*TILE-cameraX;
+   let drawY=y*TILE-cameraY;
+
+   ctx.fillStyle=map[y][x]?"#555":"#222";
+   ctx.fillRect(drawX,drawY,TILE,TILE);
+  }
+ }
+}
+
+// PLAYER
+function drawPlayer(){
+ let row=0;
+ if(player.dir=="down") row=0;
+ if(player.dir=="left") row=1;
+ if(player.dir=="right") row=2;
+ if(player.dir=="up") row=3;
+
+ ctx.drawImage(playerImg,
+  player.frame*32,row*32,32,32,
+  player.x-cameraX,player.y-cameraY,48,48
+ );
+}
+
+// DRAW
+function draw(){
+ drawMap();
+
+ drawPlayer();
+
+ enemies.forEach(e=>{
+  ctx.drawImage(enemyImg,
+   e.x-cameraX,
+   e.y-cameraY,
+   e.size,
+   e.size);
+ });
+
+ if(attackBox.active){
+  ctx.fillStyle="yellow";
+  ctx.fillRect(
+   attackBox.x-cameraX,
+   attackBox.y-cameraY,
+   attackBox.w,
+   attackBox.h
+  );
+ }
+
+ // UI
+ ctx.fillStyle="green";
+ ctx.fillRect(20,20,player.hp*2,20);
+
+ ctx.fillStyle="white";
+ ctx.fillText("Kills: "+player.kills,20,60);
+}
+
+// LOOP
+function loop(){
+ update();
+ draw();
+ requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>
